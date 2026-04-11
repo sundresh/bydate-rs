@@ -1,9 +1,10 @@
 # Source this file
+rust_bydate_dir=$(dirname "$(realpath "$0")")
 
 function td() {
-    cd "$(target/release/bydate today)"
+    cd "$(${rust_bydate_dir}/target/release/bydate today)"
 }
 
 function yd() {
-    cd "$(target/release/bydate yesterday)"
+    cd "$(${rust_bydate_dir}/target/release/bydate yesterday)"
 }
