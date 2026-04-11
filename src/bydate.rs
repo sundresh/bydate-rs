@@ -152,7 +152,8 @@ impl Bydate {
             let _ = create_dir_all(&dir_path);
             if offset_from_today == 0 {
                 // Ignore errors creating symlinks
-                let _ = ensure_symlink_exists(&self.basedir_path.join("today"), &dir_path);
+                let rel_dir_path = dir_path.strip_prefix(&self.basedir_path).ok().unwrap_or(&dir_path);
+                let _ = ensure_symlink_exists(&self.basedir_path.join("today"), &rel_dir_path);
             }
         }
 
