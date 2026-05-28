@@ -83,7 +83,7 @@ impl Bydate {
                         n if offset_from_today == None && is_plus_or_minus_int(n) => {
                             offset_from_today = Some(n.parse::<i32>().unwrap())
                         }
-                        _ => return None,
+                        _ => return None,  // Invalid or repeated argument
                     }
                 }
                 return Some(Command::Day {
@@ -200,6 +200,9 @@ impl Bydate {
         None
     }
 
+    /// Returns a vector of the days from today through `offset_from_today` days before or after
+    /// today (depending on its sign). If `only_extant_dirs` is set, then days that don't have
+    /// directories are not included in the returned vector and are not counted.
     fn list_days(&self, offset_from_today: i32, only_extant_dirs: bool) -> Vec<PathBuf> {
         let mut days = Vec::<PathBuf>::new();
         let min_day = self.min_day();
