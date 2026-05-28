@@ -43,10 +43,10 @@ impl Bydate {
         match Self::parse_args() {
             Some(Command::Day {
                 offset_from_today,
-                create_dirs: create_dir,
+                create_dirs: create_dirs,
             }) => println!(
                 "{}",
-                self.get_day(offset_from_today, create_dir)
+                self.get_day(offset_from_today, create_dirs)
                     .to_string_lossy()
             ),
             Some(Command::Days {
@@ -79,7 +79,7 @@ impl Bydate {
                 let mut create_dirs = true;
                 for arg in args {
                     match arg.as_str() {
-                        "--create-dirs" if create_dirs => create_dirs = false,
+                        "--no-create-dirs" if create_dirs => create_dirs = false,
                         n if offset_from_today == None && is_plus_or_minus_int(n) => {
                             offset_from_today = Some(n.parse::<i32>().unwrap())
                         }
