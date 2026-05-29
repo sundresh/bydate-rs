@@ -12,6 +12,7 @@ use crate::utils::*;
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // Command: result of Bydate's command line argument parsing
 
+#[derive(Debug, Eq, PartialEq)]
 enum Command {
     Day {
         offset_from_today: i32,
@@ -39,11 +40,11 @@ impl Bydate {
         }
     }
 
-    pub(crate) fn main(&self) {
-        match Self::parse_args() {
+    pub(crate) fn main<A: Iterator<Item = String>>(&self, args: A) {
+        match Self::parse_args(args) {
             Some(Command::Day {
                 offset_from_today,
-                create_dirs: create_dirs,
+                create_dirs,
             }) => println!(
                 "{}",
                 self.get_day(offset_from_today, create_dirs)
@@ -70,8 +71,7 @@ impl Bydate {
     ///     bydate tomorrow  =  bydate today +1
     ///     bydate days +-N [--extant-dirs]
     ///     ```
-    fn parse_args() -> Option<Command> {
-        let mut args = env::args();
+    fn parse_args<A: Iterator<Item = String>>(mut args: A) -> Option<Command> {
         args.next();
         match args.next().as_deref() {
             Some("today") => {
@@ -231,5 +231,74 @@ impl Bydate {
         }
 
         return days;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::tempdir;
+
+    macro_rules! args {
+        ( $( $strs: expr ),* ) => {
+            ["bydate", $( $strs ),*].into_iter().map(|s| s.to_string())
+        }
+    }
+
+    fn mkdir_p(dir_path: &Path) {
+        create_dir_all(dir_path).expect(&format!("create_dir_all({:?}) failed", dir_path));
+    }
+
+    fn create_test_dir_structure(bydate: &Bydate) {
+        mkdir_p(&bydate.basedir_path.join("2000"));
+        mkdir_p(&bydate.basedir_path.join("2001/01"));
+        mkdir_p(&bydate.basedir_path.join("2001/02"));
+        mkdir_p(&bydate.basedir_path.join("2002/03/04"));
+        mkdir_p(&bydate.basedir_path.join("2002/05/06"));
+        mkdir_p(&bydate.basedir_path.join("2003/07"));
+        mkdir_p(&bydate.basedir_path.join("2003/08"));
+        mkdir_p(&bydate.basedir_path.join("2004"));
+    }
+
+    // Test Bydate::parse_args()
+
+    #[test]
+    fn test_bydate_parse_args() {
+        assert_eq!(None, Bydate::parse_args([].into_iter()));
+        // bydate today ...
+        assert_eq!(Some(Command::Day { offset_from_today: 0, create_dirs: true   }), Bydate::parse_args(args!("today")));
+        assert_eq!(Some(Command::Day { offset_from_today: 3, create_dirs: true   }), Bydate::parse_args(args!("today", "+3")));
+        assert_eq!(Some(Command::Day { offset_from_today: -3, create_dirs: true  }), Bydate::parse_args(args!("today", "-3")));
+        assert_eq!(None, Bydate::parse_args(args!("today", "3")));
+        assert_eq!(Some(Command::Day { offset_from_today: 0, create_dirs: false  }), Bydate::parse_args(args!("today", "--no-create-dirs")));
+        assert_eq!(None, Bydate::parse_args(args!("today", "--invalid-arg")));
+        assert_eq!(Some(Command::Day { offset_from_today: 3, create_dirs: false  }), Bydate::parse_args(args!("today", "+3", "--no-create-dirs")));
+        assert_eq!(Some(Command::Day { offset_from_today: -3, create_dirs: false }), Bydate::parse_args(args!("today", "--no-create-dirs", "-3")));
+        // bydate yesterday ...
+        // TODO
+        // bydate tomorrow ...
+        // TODO
+        // bydate days ...
+        // TODO
+    }
+
+    // Test Bydate::min_day()
+
+    #[test]
+    fn test_min_day() {
+        let tempdir = tempdir().expect("failed to create temporary directory with tempdir()");
+        let bydate = Bydate { basedir_path: tempdir.path().to_path_buf(), today: NaiveDate::from_ymd_opt(2010, 1, 1).unwrap() };
+        create_test_dir_structure(&bydate);
+        assert_eq!(Some(NaiveDate::from_ymd_opt(2002, 3, 4).unwrap()), bydate.min_day());
+    }
+
+    // Test Bydate::max_day()
+
+    #[test]
+    fn test_max_day() {
+        let tempdir = tempdir().expect("failed to create temporary directory with tempdir()");
+        let bydate = Bydate { basedir_path: tempdir.path().to_path_buf(), today: NaiveDate::from_ymd_opt(2010, 1, 1).unwrap() };
+        create_test_dir_structure(&bydate);
+        assert_eq!(Some(NaiveDate::from_ymd_opt(2002, 5, 6).unwrap()), bydate.max_day());
     }
 }
