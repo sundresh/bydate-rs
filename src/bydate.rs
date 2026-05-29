@@ -2,7 +2,6 @@ use chrono::{Datelike, Local, NaiveDate, TimeDelta};
 use dirs;
 use shellexpand::tilde;
 use std::{
-    env,
     fs::{create_dir_all, exists, read_link},
     path::{Path, PathBuf},
 };
@@ -210,12 +209,12 @@ impl Bydate {
 
         if let (Some(min_day), Some(max_day)) = (min_day, max_day) {
             let mut count_remaining = offset_from_today.abs() + 1;
-            let mut current_offset = 0;
             let offset_delta = if offset_from_today >= 0 { 1 } else { -1 };
+            let mut current_offset = -offset_delta;
 
             while count_remaining > 0 {
-                let path_buf = self.get_day(current_offset, false);
                 current_offset += offset_delta;
+                let path_buf = self.get_day(current_offset, false);
                 if only_extant_dirs {
                     let day = self.today + TimeDelta::days(current_offset as i64);
                     if day < min_day || day > max_day {
@@ -249,15 +248,21 @@ mod tests {
         create_dir_all(dir_path).expect(&format!("create_dir_all({:?}) failed", dir_path));
     }
 
-    fn create_test_dir_structure(bydate: &Bydate) {
-        mkdir_p(&bydate.basedir_path.join("2000"));
-        mkdir_p(&bydate.basedir_path.join("2001/01"));
-        mkdir_p(&bydate.basedir_path.join("2001/02"));
-        mkdir_p(&bydate.basedir_path.join("2002/03/04"));
-        mkdir_p(&bydate.basedir_path.join("2002/05/06"));
-        mkdir_p(&bydate.basedir_path.join("2003/07"));
-        mkdir_p(&bydate.basedir_path.join("2003/08"));
-        mkdir_p(&bydate.basedir_path.join("2004"));
+    fn create_test_dir_structure(basedir_path: &Path) -> Bydate {
+        mkdir_p(&basedir_path.join("2000"));
+        mkdir_p(&basedir_path.join("2001/01"));
+        mkdir_p(&basedir_path.join("2001/02"));
+        mkdir_p(&basedir_path.join("2002/03/04"));
+        mkdir_p(&basedir_path.join("2003/04/10"));
+        mkdir_p(&basedir_path.join("2003/05/14"));
+        mkdir_p(&basedir_path.join("2003/05/16"));
+        mkdir_p(&basedir_path.join("2003/05/18"));
+        mkdir_p(&basedir_path.join("2003/06/03"));
+        mkdir_p(&basedir_path.join("2004/05/06"));
+        mkdir_p(&basedir_path.join("2005/07"));
+        mkdir_p(&basedir_path.join("2006/08"));
+        mkdir_p(&basedir_path.join("2007"));
+        Bydate { basedir_path: basedir_path.to_path_buf(), today: NaiveDate::from_ymd_opt(2003, 5, 16).unwrap() }
     }
 
     // Test Bydate::parse_args()
@@ -266,20 +271,49 @@ mod tests {
     fn test_bydate_parse_args() {
         assert_eq!(None, Bydate::parse_args([].into_iter()));
         // bydate today ...
-        assert_eq!(Some(Command::Day { offset_from_today: 0, create_dirs: true   }), Bydate::parse_args(args!("today")));
-        assert_eq!(Some(Command::Day { offset_from_today: 3, create_dirs: true   }), Bydate::parse_args(args!("today", "+3")));
+        assert_eq!(Some(Command::Day { offset_from_today:  0, create_dirs: true  }), Bydate::parse_args(args!("today")));
+        assert_eq!(None, Bydate::parse_args(args!("today", "3")));
+        assert_eq!(Some(Command::Day { offset_from_today:  3, create_dirs: true  }), Bydate::parse_args(args!("today", "+3")));
         assert_eq!(Some(Command::Day { offset_from_today: -3, create_dirs: true  }), Bydate::parse_args(args!("today", "-3")));
         assert_eq!(None, Bydate::parse_args(args!("today", "3")));
-        assert_eq!(Some(Command::Day { offset_from_today: 0, create_dirs: false  }), Bydate::parse_args(args!("today", "--no-create-dirs")));
+        assert_eq!(Some(Command::Day { offset_from_today:  0, create_dirs: false }), Bydate::parse_args(args!("today", "--no-create-dirs")));
         assert_eq!(None, Bydate::parse_args(args!("today", "--invalid-arg")));
-        assert_eq!(Some(Command::Day { offset_from_today: 3, create_dirs: false  }), Bydate::parse_args(args!("today", "+3", "--no-create-dirs")));
+        assert_eq!(Some(Command::Day { offset_from_today:  3, create_dirs: false }), Bydate::parse_args(args!("today", "+3", "--no-create-dirs")));
         assert_eq!(Some(Command::Day { offset_from_today: -3, create_dirs: false }), Bydate::parse_args(args!("today", "--no-create-dirs", "-3")));
-        // bydate yesterday ...
-        // TODO
-        // bydate tomorrow ...
-        // TODO
+        // bydate yesterday
+        assert_eq!(Some(Command::Day { offset_from_today: -1, create_dirs: true  }), Bydate::parse_args(args!("yesterday")));
+        // bydate tomorrow
+        assert_eq!(Some(Command::Day { offset_from_today:  1, create_dirs: true  }), Bydate::parse_args(args!("tomorrow")));
         // bydate days ...
-        // TODO
+        assert_eq!(None, Bydate::parse_args(args!("days")));
+        assert_eq!(Some(Command::Days { offset_from_today:  3, only_extant_dirs: false }), Bydate::parse_args(args!("days", "+3")));
+        assert_eq!(Some(Command::Days { offset_from_today: -3, only_extant_dirs: false }), Bydate::parse_args(args!("days", "-3")));
+        assert_eq!(Some(Command::Days { offset_from_today:  3, only_extant_dirs: true  }), Bydate::parse_args(args!("days", "+3", "--extant-dirs")));
+        assert_eq!(Some(Command::Days { offset_from_today: -3, only_extant_dirs: true  }), Bydate::parse_args(args!("days", "-3", "--extant-dirs")));
+        assert_eq!(Some(Command::Days { offset_from_today:  3, only_extant_dirs: true  }), Bydate::parse_args(args!("days", "--extant-dirs", "+3")));
+        assert_eq!(Some(Command::Days { offset_from_today: -3, only_extant_dirs: true  }), Bydate::parse_args(args!("days", "--extant-dirs", "-3")));
+    }
+
+    // Test Bydate::get_day()
+
+    #[test]
+    fn test_get_day() {
+        let tempdir = tempdir().expect("failed to create temporary directory with tempdir()");
+        let bydate = create_test_dir_structure(tempdir.path());
+        assert_eq!(tempdir.path().join("2003/05/16"), bydate.get_day(0, false));
+        assert_eq!(tempdir.path().join("2003/05/17"), bydate.get_day(1, false));
+        assert_eq!(tempdir.path().join("2003/05/15"), bydate.get_day(-1, false));
+        assert_eq!(tempdir.path().join("2003/06/01"), bydate.get_day(16, false));
+        assert_eq!(tempdir.path().join("2003/04/30"), bydate.get_day(-16, false));
+    }
+
+    // Test Bydate::parse_date_from_path()
+
+    #[test]
+    fn test_parse_date_from_path() {
+        let bydate = Bydate { basedir_path: PathBuf::from("/a/b/c"), today: NaiveDate::from_ymd_opt(2003, 5, 16).unwrap() };
+        assert_eq!(None, bydate.parse_date_from_path(&bydate.basedir_path.join("2003/05")));
+        assert_eq!(Some(bydate.today), bydate.parse_date_from_path(&bydate.basedir_path.join("2003/05/16")));
     }
 
     // Test Bydate::min_day()
@@ -287,8 +321,7 @@ mod tests {
     #[test]
     fn test_min_day() {
         let tempdir = tempdir().expect("failed to create temporary directory with tempdir()");
-        let bydate = Bydate { basedir_path: tempdir.path().to_path_buf(), today: NaiveDate::from_ymd_opt(2010, 1, 1).unwrap() };
-        create_test_dir_structure(&bydate);
+        let bydate = create_test_dir_structure(tempdir.path());
         assert_eq!(Some(NaiveDate::from_ymd_opt(2002, 3, 4).unwrap()), bydate.min_day());
     }
 
@@ -297,8 +330,26 @@ mod tests {
     #[test]
     fn test_max_day() {
         let tempdir = tempdir().expect("failed to create temporary directory with tempdir()");
-        let bydate = Bydate { basedir_path: tempdir.path().to_path_buf(), today: NaiveDate::from_ymd_opt(2010, 1, 1).unwrap() };
-        create_test_dir_structure(&bydate);
-        assert_eq!(Some(NaiveDate::from_ymd_opt(2002, 5, 6).unwrap()), bydate.max_day());
+        let bydate = create_test_dir_structure(tempdir.path());
+        assert_eq!(Some(NaiveDate::from_ymd_opt(2004, 5, 6).unwrap()), bydate.max_day());
+    }
+
+    // Test Bydate::list_days()
+
+    #[test]
+    fn test_list_days() {
+        let tempdir = tempdir().expect("failed to create temporary directory with tempdir()");
+        let p = tempdir.path();
+        let bydate = create_test_dir_structure(p);
+        assert_eq!(vec![p.join("2003/05/16")], bydate.list_days(0, false));
+        assert_eq!(vec![p.join("2003/05/16")], bydate.list_days(0, true));
+        assert_eq!(vec![p.join("2003/05/16"), p.join("2003/05/17")], bydate.list_days(1, false));
+        assert_eq!(vec![p.join("2003/05/16"), p.join("2003/05/18")], bydate.list_days(1, true));
+        assert_eq!(vec![p.join("2003/05/16"), p.join("2003/05/15")], bydate.list_days(-1, false));
+        assert_eq!(vec![p.join("2003/05/16"), p.join("2003/05/14")], bydate.list_days(-1, true));
+        assert_eq!(vec![p.join("2003/05/16"), p.join("2003/05/18"), p.join("2003/06/03"), p.join("2004/05/06")], bydate.list_days(3, true));
+        assert_eq!(vec![p.join("2003/05/16"), p.join("2003/05/18"), p.join("2003/06/03"), p.join("2004/05/06")], bydate.list_days(4, true));
+        assert_eq!(vec![p.join("2003/05/16"), p.join("2003/05/14"), p.join("2003/04/10"), p.join("2002/03/04")], bydate.list_days(-3, true));
+        assert_eq!(vec![p.join("2003/05/16"), p.join("2003/05/14"), p.join("2003/04/10"), p.join("2002/03/04")], bydate.list_days(-4, true));
     }
 }
