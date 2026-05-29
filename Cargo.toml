@@ -7,3 +7,6 @@ edition = "2024"
 chrono = { version = "0.4.44", default-features = false, features = ["clock", "now"] }
 dirs = "6.0.0"
 shellexpand = "3.1.2"
+
+[dev-dependencies]
+tempfile = "3"
